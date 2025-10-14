@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import time
 import torch
+from datetime import datetime
+import shutil
 
 class SpeechToTextApp:
     def __init__(self, root):
@@ -21,6 +23,9 @@ class SpeechToTextApp:
         
         # Device detection
         self.device = self.detect_device()
+        
+        # Output folder setup
+        self.output_folder = self.setup_output_folder()
         
         # Time tracking
         self.start_time = None
@@ -42,6 +47,14 @@ class SpeechToTextApp:
             device = "cpu"
             print("Using CPU (no GPU detected)")
         return device
+        
+    def setup_output_folder(self):
+        """Setup default output folder for transcriptions"""
+        # Create output folder in the same directory as the script
+        script_dir = Path(__file__).parent
+        output_folder = script_dir / "transcriptions"
+        output_folder.mkdir(exist_ok=True)
+        return output_folder
         
     def get_device_status_text(self):
         """Get device status text for display"""
@@ -222,11 +235,31 @@ class SpeechToTextApp:
         )
         self.text_output.pack(fill='both', expand=True, pady=5)
         
+        # Button frame for copy and save
+        button_frame = tk.Frame(text_frame, bg='#f0f0f0')
+        button_frame.pack(pady=5)
+        
+        # Copy button
+        self.copy_button = tk.Button(
+            button_frame,
+            text="📋 Copy to Clipboard",
+            command=self.copy_text,
+            font=("Arial", 10),
+            bg='#2196F3',
+            fg='white',
+            padx=15,
+            pady=5,
+            relief='raised',
+            bd=2,
+            state='disabled'
+        )
+        self.copy_button.pack(side='left', padx=5)
+        
         # Save button
         self.save_button = tk.Button(
-            text_frame,
-            text="Save Text to File",
-            command=self.save_text,
+            button_frame,
+            text="💾 Save to Custom Location",
+            command=self.save_text_custom,
             font=("Arial", 10),
             bg='#FF9800',
             fg='white',
@@ -236,7 +269,7 @@ class SpeechToTextApp:
             bd=2,
             state='disabled'
         )
-        self.save_button.pack(pady=5)
+        self.save_button.pack(side='left', padx=5)
         
     def select_file(self):
         """Open file dialog to select audio or video file"""
@@ -380,9 +413,13 @@ class SpeechToTextApp:
         self.transcribe_button.config(state='normal')
         self.select_button.config(state='normal')
         self.save_button.config(state='normal')
+        self.copy_button.config(state='normal')
+        
+        # Automatically save to default folder
+        self.auto_save_text(text)
         
         # Show completion message
-        messagebox.showinfo("Success", f"Transcription completed successfully!\n\n{time_str}")
+        messagebox.showinfo("Success", f"Transcription completed successfully!\n\n{time_str}\n\nText automatically saved to:\n{self.output_folder}")
         
     def transcription_error(self, error_msg):
         """Handle transcription error"""
@@ -406,9 +443,44 @@ class SpeechToTextApp:
         self.time_var.set("")
         self.transcribe_button.config(state='normal')
         self.select_button.config(state='normal')
+        self.save_button.config(state='disabled')
+        self.copy_button.config(state='disabled')
         
-    def save_text(self):
-        """Save transcribed text to a file"""
+    def auto_save_text(self, text_content):
+        """Automatically save transcribed text to default folder"""
+        try:
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"transcription_{timestamp}.txt"
+            file_path = self.output_folder / filename
+            
+            # Save the text
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(text_content)
+            
+            print(f"Text automatically saved to: {file_path}")
+            return file_path
+        except Exception as e:
+            print(f"Failed to auto-save text: {str(e)}")
+            return None
+    
+    def copy_text(self):
+        """Copy transcribed text to clipboard"""
+        text_content = self.text_output.get(1.0, tk.END).strip()
+        
+        if not text_content:
+            messagebox.showwarning("Warning", "No text to copy!")
+            return
+            
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text_content)
+            messagebox.showinfo("Success", "Text copied to clipboard!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to copy text: {str(e)}")
+    
+    def save_text_custom(self):
+        """Save transcribed text to a custom location"""
         text_content = self.text_output.get(1.0, tk.END).strip()
         
         if not text_content:
